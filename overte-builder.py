@@ -16,6 +16,7 @@ import re
 from enum import IntEnum
 
 
+
 class CommandTimer:
     """Timer that can be used as a context manager and queried at any time."""
 
@@ -113,6 +114,10 @@ class Notifier:
                 hints,
                 5000
             )
+        except dbus.exceptions.DBusException as de:
+            print(f"Notification failed: {e}", file=sys.stderr)
+            return 0
+
         except Exception as e:
             # Ignore excess notifications, we're drawing a progress bar, so it's a possibility it won't like it.
             if not "org.freedesktop.Notifications.Error.ExcessNotificationGeneration" in e:
