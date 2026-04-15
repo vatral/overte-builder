@@ -1,20 +1,21 @@
-#!/usr/bin/env python3
 """Build script for Overte using Conan and CMake."""
 
+from __future__ import annotations
+
 import argparse
-import subprocess
-import sys
-from pathlib import Path
-import time
-from colorama import Fore, init
-import shutil
-import pty
-import select
 import os
-
+import pty
 import re
+import select
+import shutil
+import subprocess
+import time
+from pathlib import Path
+from typing import Callable
 
-from notifier import Notifier, Urgency
+from colorama import Fore, init
+
+from .notifier import Notifier, Urgency
 
 
 class CommandTimer:
@@ -52,20 +53,31 @@ class CommandTimer:
         return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
 
-
-def run_command(cmd, cwd=None, log_file=None, callback=None):
-    """Execute a command and return the result."""
+def run_command(
+    cmd: list[str],
+    cwd: str | os.PathLike[str] | None = None,
+    log_file: str | None = None,
+    callback: Callable[[str], None] | None = None,
+) -> bool:
+    """Execute a command and stream output to terminal and optional log."""
     print(f"Running: {' '.join(cmd)}")
 
     if log_file:
         master_fd, slave_fd = pty.openpty()
 
-        with open(log_file, 'ab') as f:
+        with open(log_file, "ab") as f:
             f.write(f"Running: {' '.join(cmd)}\n".encode())
             f.flush()
 
-            #with subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True) as proc:
-            with subprocess.Popen(cmd, cwd=cwd, stdin=slave_fd, stdout=slave_fd, stderr=slave_fd, text=True, close_fds=True) as proc:
+            with subprocess.Popen(
+                cmd,
+                cwd=cwd,
+                stdin=slave_fd,
+                stdout=slave_fd,
+                stderr=slave_fd,
+                text=True,
+                close_fds=True,
+            ) as proc:
                 while True:
                     read_fds, _, _ = select.select([master_fd], [], [], 0.1)
                     if master_fd in read_fds:
@@ -82,33 +94,25 @@ def run_command(cmd, cwd=None, log_file=None, callback=None):
                         if callback:
                             try:
                                 callback(decoded)
-                            except Exception as ex:
-                                print(f"Error in callback: {ex}")
+                            except Exception as exc:
+                                print(f"Error in callback: {exc}")
 
                         f.write(data)
                     if proc.poll() is not None:
                         break
 
                 returncode = proc.wait()
-
     else:
         result = subprocess.run(cmd, cwd=cwd)
         returncode = result.returncode
 
     return returncode == 0
 
-def unicode_progress_bar(percent: float, width: int = 12) -> str:
-    """
-    Return a Unicode progress bar like:
-    ████████▌░░ 71%
 
-    percent: 0..100
-    width: number of bar cells
-    """
-    # Clamp to valid range
+def unicode_progress_bar(percent: float, width: int = 12) -> str:
+    """Return a compact progress bar plus integer percentage."""
     percent = max(0.0, min(100.0, percent))
 
-    # Partial block characters from empty to full
     partials = ["", "▏", "▎", "▍", "▌", "▋", "▊", "▉", "█"]
 
     total_units = width * 8
@@ -127,25 +131,24 @@ def unicode_progress_bar(percent: float, width: int = 12) -> str:
     return f"{bar} {percent:>3.0f}%"
 
 
-def ninja_build_progress(output : str, notifier : Notifier, message_id = 0):
-    # CMake uses \r to print stuff on the same line, strip that
+def ninja_build_progress(output: str, notifier: Notifier, message_id: int = 0) -> None:
+    """Parse Ninja output and publish progress notifications."""
     output = output.replace("\r", "")
 
-    ret = re.match(r"^\[(\d+)\/(\d+)\] (.*?)$", output, flags=re.MULTILINE)
+    result = re.match(r"^\[(\d+)\/(\d+)\] (.*?)$", output, flags=re.MULTILINE)
 
-    if ret:
-        progress = int(ret.group(1))
-        total = int(ret.group(2))
-        file = ret.group(3)
+    if result:
+        progress = int(result.group(1))
+        total = int(result.group(2))
 
-        percent = (100/total) * progress
-        unicode_bar = unicode_progress_bar(percent, width = 20)
+        percent = (100 / total) * progress
+        unicode_bar = unicode_progress_bar(percent, width=20)
 
         notifier.notify(unicode_bar, replaces_id=message_id)
 
 
-def main():
-
+def main() -> int:
+    """CLI entry point."""
     init()
 
     parser = argparse.ArgumentParser(
@@ -153,16 +156,26 @@ def main():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
-    parser.add_argument("--debug", action='store_true', help="Debug mode")
-    parser.add_argument("--asan",  action='store_true', help="Build with Address Sanitizer")
-    parser.add_argument("--tsan", action='store_true', help="Build with Thread Sanitizer")
-    parser.add_argument("--skip-conan", action='store_true', help="Skip Conan invocation")
-    parser.add_argument("--skip-cmake", action='store_true', help="Skip CMake invocation")
-
-    parser.add_argument("--build", action='store_true', help="Run a compilation. Without this option it only runs conan and cmake.")
-    parser.add_argument("--incremental-build", action='store_true', help="Run a compilation incrementally. Skips conan and cmake, and builds without cleaning the tree.")
-    parser.add_argument("--vulkan", action='store_true', help="Build with the Vulkan renderer")
-
+    parser.add_argument("--debug", action="store_true", help="Debug mode")
+    parser.add_argument("--asan", action="store_true", help="Build with Address Sanitizer")
+    parser.add_argument("--tsan", action="store_true", help="Build with Thread Sanitizer")
+    parser.add_argument("--skip-conan", action="store_true", help="Skip Conan invocation")
+    parser.add_argument("--skip-cmake", action="store_true", help="Skip CMake invocation")
+    parser.add_argument(
+        "--build",
+        action="store_true",
+        help="Run compilation. Without this option it only runs conan and cmake.",
+    )
+    parser.add_argument(
+        "--incremental-build",
+        action="store_true",
+        help="Run incremental compilation: skip conan/cmake and do not clean output.",
+    )
+    parser.add_argument(
+        "--vulkan",
+        action="store_true",
+        help="Build with the Vulkan renderer",
+    )
 
     notifier = Notifier()
     args = parser.parse_args()
@@ -172,8 +185,6 @@ def main():
         args.skip_conan = True
         args.skip_cmake = True
 
-
-    status_message = "Building"
     build_name = "Release"
     output_dir = "out/Release"
     cmake_preset = "conan-release"
@@ -184,9 +195,6 @@ def main():
         cmake_preset = "conan-debug"
         build_name = "Debug"
         conan_build_type = "Debug"
-    else:
-        build_name = "Release"
-        conan_build_type = "Release"
 
     if args.vulkan:
         output_dir = output_dir + "Vulkan"
@@ -203,95 +211,122 @@ def main():
         output_dir = output_dir + "TSAN"
         build_name = build_name + " with TSAN"
 
-
     status_message = "Building " + build_name
     notifier.title = status_message
 
-
     if (args.asan or args.tsan) and not args.debug:
-        print(f"{Fore.RED}Warning: Building with sanitizer but not in debug mode. Non-debug build will be built.{Fore.RESET}", flush=True)
+        print(
+            (
+                f"{Fore.RED}Warning: Building with sanitizer but not in debug mode. "
+                "Non-debug build will be built."
+                f"{Fore.RESET}"
+            ),
+            flush=True,
+        )
         time.sleep(3)
 
+    if not args.skip_conan and not args.skip_cmake and Path(output_dir).exists():
+        shutil.rmtree(output_dir)
 
-    if not args.skip_conan and not args.skip_cmake:
-        if Path(output_dir).exists():
-            shutil.rmtree(output_dir)
-
-    # Run Conan install
     if not args.skip_conan:
-        notifier.notify(message = "Running Conan")
+        notifier.notify(message="Running Conan")
 
         conan_cmd = [
             "conan",
             "install",
             ".",
-            "-s", "build_type=" + conan_build_type,
+            "-s",
+            "build_type=" + conan_build_type,
             "--build=missing",
             "-pr:b=default",
-            "-of", output_dir,
+            "-of",
+            output_dir,
         ]
 
         with CommandTimer() as tmr:
             if not run_command(conan_cmd, log_file="conan.log"):
-                print("Conan install failed after {tmr.hhmmss}")
-                notifier.notify(message="Conan install failed after {tmr.hhmmss}", urgency=Urgency.High)
+                print(f"Conan install failed after {tmr.hhmmss}")
+                notifier.notify(
+                    message=f"Conan install failed after {tmr.hhmmss}",
+                    urgency=Urgency.High,
+                )
                 return 1
 
         print(f"{Fore.GREEN}Conan install succeeded after {tmr.hhmmss}{Fore.RESET}")
 
-    # Run CMake
     if not args.skip_cmake:
-        extra_cxxflags=""
-        #if args.debug:
-
-
         cmake_cmd = [
             "cmake",
-            "--preset", cmake_preset,
-            "-G", "Ninja",
+            "--preset",
+            cmake_preset,
+            "-G",
+            "Ninja",
             "-DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=mold",
             "-DCMAKE_SHARED_LINKER_FLAGS=-fuse-ld=mold",
-            "-DCMAKE_CXX_FLAGS=-fdiagnostics-color=always -fdiagnostics-generate-patch -fdiagnostics-text-art-charset=emoji --param=max-vartrack-size=0"
+            (
+                "-DCMAKE_CXX_FLAGS=-fdiagnostics-color=always "
+                "-fdiagnostics-generate-patch "
+                "-fdiagnostics-text-art-charset=emoji --param=max-vartrack-size=0"
+            ),
         ]
 
         if args.asan:
-            cmake_cmd += [ "-DOVERTE_MEMORY_DEBUGGING=ON" ]
+            cmake_cmd += ["-DOVERTE_MEMORY_DEBUGGING=ON"]
 
         if args.tsan:
-            cmake_cmd += [ "-DOVERTE_THREAD_DEBUGGING=ON" ]
+            cmake_cmd += ["-DOVERTE_THREAD_DEBUGGING=ON"]
 
         if args.vulkan:
-            cmake_cmd += [ "-DOVERTE_RENDERING_BACKEND=Vulkan" ]
+            cmake_cmd += ["-DOVERTE_RENDERING_BACKEND=Vulkan"]
 
-        notifier.notify(message = "Running CMake")
+        notifier.notify(message="Running CMake")
 
         with CommandTimer() as tmr:
             if not run_command(cmake_cmd, log_file="cmake.log"):
                 print(f"CMake configuration failed after {tmr.hhmmss}")
-                notifier.notify(message=f"CMake configuration failed after {tmr.hhmmss}", urgency=Urgency.High)
-
+                notifier.notify(
+                    message=f"CMake configuration failed after {tmr.hhmmss}",
+                    urgency=Urgency.High,
+                )
                 return 1
 
-            print(f"{Fore.GREEN}Generated CMake files in {Fore.WHITE}{output_dir}{Fore.GREEN} in in {tmr.hhmmss}{Fore.RESET}")
+            print(
+                (
+                    f"{Fore.GREEN}Generated CMake files in {Fore.WHITE}{output_dir}"
+                    f"{Fore.GREEN} in {tmr.hhmmss}{Fore.RESET}"
+                )
+            )
 
-    # Build
     if args.build:
         build_cmd = ["cmake", "--build", output_dir]
-        building_id = notifier.notify(message = "Compiling")
-
-
-        start_time = time.time()
+        building_id = notifier.notify(message="Compiling")
 
         with CommandTimer() as tmr:
-            if not run_command(build_cmd, log_file="build.log", callback=lambda msg: ninja_build_progress(msg, notifier=notifier, message_id=building_id)):
-                notifier.notify(message=f"Compilation failed after {tmr.hhmmss}", urgency = Urgency.High)
+            if not run_command(
+                build_cmd,
+                log_file="build.log",
+                callback=lambda msg: ninja_build_progress(
+                    msg,
+                    notifier=notifier,
+                    message_id=building_id,
+                ),
+            ):
+                notifier.notify(
+                    message=f"Compilation failed after {tmr.hhmmss}",
+                    urgency=Urgency.High,
+                )
                 print(f"Build failed after {tmr.hhmmss}")
                 return 1
 
-        notifier.notify(message=f"Build successfully completed in {tmr.hhmmss}", urgency = Urgency.Low)
-        print(f"{Fore.GREEN}Successfully built {Fore.BLUE}{build_name}{Fore.GREEN} in {Fore.WHITE}{output_dir}{Fore.GREEN} in {tmr.hhmmss}{Fore.RESET}")
+        notifier.notify(
+            message=f"Build successfully completed in {tmr.hhmmss}",
+            urgency=Urgency.Low,
+        )
+        print(
+            (
+                f"{Fore.GREEN}Successfully built {Fore.BLUE}{build_name}{Fore.GREEN} "
+                f"in {Fore.WHITE}{output_dir}{Fore.GREEN} in {tmr.hhmmss}{Fore.RESET}"
+            )
+        )
+
     return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

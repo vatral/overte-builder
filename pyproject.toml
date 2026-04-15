@@ -1,0 +1,73 @@
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "overte-builder"
+version = "0.1.0"
+description = "Command-line builder utility for Overte using Conan, CMake, and Ninja"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [
+  { name = "Overte Contributors" }
+]
+keywords = ["overte", "cmake", "conan", "ninja", "build"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Build Tools",
+]
+dependencies = [
+  "colorama>=0.4.6",
+]
+
+[project.optional-dependencies]
+notifications = [
+  "dbus-python>=1.3.2; platform_system == 'Linux'",
+]
+
+[project.scripts]
+overte-builder = "overte_builder.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/vatral/overte-builder"
+Repository = "https://github.com/vatral/overte-builder"
+Issues = "https://github.com/vatral/overte-builder/issues"
+Changelog = "https://github.com/vatral/overte-builder/blob/main/CHANGELOG.md"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/overte_builder"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "src/overte_builder",
+  "README.md",
+  "CHANGELOG.md",
+  "CONTRIBUTING.md",
+  "LICENSE",
+  "pyproject.toml",
+  "overte-builder.py",
+  "notifier.py",
+]
+
+[tool.hatch.envs.default]
+dependencies = [
+  "build>=1.2.2",
+  "twine>=5.1.1",
+]
+
+[tool.hatch.envs.default.scripts]
+check = [
+  "python -m build",
+  "python -m twine check dist/*",
+]
+
