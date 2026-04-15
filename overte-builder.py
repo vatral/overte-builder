@@ -80,14 +80,14 @@ class Notifier:
             replaces_id = self.previous_id
 
         if replaces_id != 0:
+            current_time = time.time()
             elapsed_since_first_use = current_time - self.previous_id_first_use
+
             if elapsed_since_first_use > self.max_duration:
-                # We want a new one
+                # Our notification has lasted too long, we want a new one.
                 replaces_id = 0
             else:
-                current_time = time.time()
                 elapsed = current_time - self.previous_time
-
 
                 if elapsed < self.min_update_time:
                     # In "replaces" mode we're rapidly updating a notification, limit it
