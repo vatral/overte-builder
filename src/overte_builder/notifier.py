@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
+import os
 import sys
 import time
 from enum import IntEnum
+from typing import Mapping
 
 try:
-    import dbus
+    import dbus  # type: ignore[import-not-found]
 except ImportError:  # pragma: no cover - depends on local desktop environment
     dbus = None
 
@@ -18,6 +21,7 @@ class Urgency(IntEnum):
     Low = 0
     Normal = 1
     High = 2
+
 
 
 class Notifier:

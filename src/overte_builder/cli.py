@@ -10,13 +10,15 @@ import select
 import shutil
 import subprocess
 import time
+import sys
+
 from pathlib import Path
 from typing import Callable
 
 from colorama import Fore, init
 
 from .notifier import Notifier, Urgency
-
+from .progress import ProgressBarNotifier, create_progress_bar_notifier
 
 class CommandTimer:
     """Timer that can be used as a context manager and queried at any time."""
@@ -109,42 +111,20 @@ def run_command(
     return returncode == 0
 
 
-def unicode_progress_bar(percent: float, width: int = 12) -> str:
-    """Return a compact progress bar plus integer percentage."""
-    percent = max(0.0, min(100.0, percent))
-
-    partials = ["", "▏", "▎", "▍", "▌", "▋", "▊", "▉", "█"]
-
-    total_units = width * 8
-    filled_units = round((percent / 100.0) * total_units)
-
-    full_blocks = filled_units // 8
-    remainder = filled_units % 8
-
-    bar = "█" * full_blocks
-
-    if full_blocks < width and remainder > 0:
-        bar += partials[remainder]
-
-    bar += "░" * (width - len(bar))
-
-    return f"{bar} {percent:>3.0f}%"
 
 
-def ninja_build_progress(output: str, notifier: Notifier, message_id: int = 0) -> None:
+def ninja_build_progress(output: str, progress_notifier: ProgressBarNotifier) -> None:
     """Parse Ninja output and publish progress notifications."""
     output = output.replace("\r", "")
 
     result = re.match(r"^\[(\d+)\/(\d+)\] (.*?)$", output, flags=re.MULTILINE)
 
     if result:
-        progress = int(result.group(1))
+        completed = int(result.group(1))
         total = int(result.group(2))
 
-        percent = (100 / total) * progress
-        unicode_bar = unicode_progress_bar(percent, width=20)
-
-        notifier.notify(unicode_bar, replaces_id=message_id)
+        percent = (100 / total) * completed
+        progress_notifier.update(percent)
 
 
 def main() -> int:
@@ -176,9 +156,22 @@ def main() -> int:
         action="store_true",
         help="Build with the Vulkan renderer",
     )
+    parser.add_argument("--test-progress", action="store_true", help="Test the progress bar")
 
     notifier = Notifier()
     args = parser.parse_args()
+
+
+    if args.test_progress:
+        progress = create_progress_bar_notifier()
+        progress.start("Testing")
+        for x in range(0,10):
+            progress.update((100/10)*x)
+            time.sleep(1)
+        progress.finish()
+
+        sys.exit(0)
+
 
     if args.incremental_build:
         args.build = True
@@ -301,14 +294,16 @@ def main() -> int:
         build_cmd = ["cmake", "--build", output_dir]
         building_id = notifier.notify(message="Compiling")
 
+        progress = create_progress_bar_notifier()
+        progress.start(status_message)
+
         with CommandTimer() as tmr:
             if not run_command(
                 build_cmd,
                 log_file="build.log",
                 callback=lambda msg: ninja_build_progress(
                     msg,
-                    notifier=notifier,
-                    message_id=building_id,
+                    progress_notifier=progress,
                 ),
             ):
                 notifier.notify(
