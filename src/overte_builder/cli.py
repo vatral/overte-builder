@@ -309,17 +309,12 @@ def main() -> int:
                     progress_notifier=progress,
                 ),
             ):
-                notifier.notify(
-                    message=f"Compilation failed after {tmr.hhmmss}",
-                    urgency=Urgency.High,
-                )
+                progress.finish(f"Compilation failed after {tmr.hhmmss}")
+
                 print(f"Build failed after {tmr.hhmmss}")
                 return 1
 
-        notifier.notify(
-            message=f"Build successfully completed in {tmr.hhmmss}",
-            urgency=Urgency.Low,
-        )
+        progress.finish(f"Compilation successfully completed after {tmr.hhmmss}")
         print(
             (
                 f"{Fore.GREEN}Successfully built {Fore.BLUE}{build_name}{Fore.GREEN} "
