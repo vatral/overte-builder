@@ -263,6 +263,9 @@ def main() -> int:
             ),
         ]
 
+        if args.debug:
+            cmake_cmd += ["-DOVERTE_BUILD_TESTS=ON"]
+
         if args.asan:
             cmake_cmd += ["-DOVERTE_MEMORY_DEBUGGING=ON"]
 
