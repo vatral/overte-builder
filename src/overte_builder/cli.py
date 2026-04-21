@@ -218,8 +218,20 @@ def main() -> int:
         )
         time.sleep(3)
 
-    if not args.skip_conan and not args.skip_cmake and Path(output_dir).exists():
-        shutil.rmtree(output_dir)
+    base_dir = Path.cwd().resolve()
+    while not (base_dir / "conanfile.py").is_file():
+        parent = base_dir.parent
+        if parent == base_dir:
+            print(
+                f"{Fore.RED}Error: could not find conanfile.py from current directory up to filesystem root.{Fore.RESET}"
+            )
+            return 1
+        base_dir = parent
+
+    output_path = base_dir / output_dir
+
+    if not args.skip_conan and not args.skip_cmake and output_path.exists():
+        shutil.rmtree(output_path)
 
     if not args.skip_conan:
         notifier.notify(message="Running Conan")
@@ -233,11 +245,11 @@ def main() -> int:
             "--build=missing",
             "-pr:b=default",
             "-of",
-            output_dir,
+            str(output_path),
         ]
 
         with CommandTimer() as tmr:
-            if not run_command(conan_cmd, log_file="conan.log"):
+            if not run_command(conan_cmd, cwd=base_dir, log_file="conan.log"):
                 print(f"Conan install failed after {tmr.hhmmss}")
                 notifier.notify(
                     message=f"Conan install failed after {tmr.hhmmss}",
@@ -278,7 +290,7 @@ def main() -> int:
         notifier.notify(message="Running CMake")
 
         with CommandTimer() as tmr:
-            if not run_command(cmake_cmd, log_file="cmake.log"):
+            if not run_command(cmake_cmd, cwd=base_dir, log_file="cmake.log"):
                 print(f"CMake configuration failed after {tmr.hhmmss}")
                 notifier.notify(
                     message=f"CMake configuration failed after {tmr.hhmmss}",
@@ -294,7 +306,7 @@ def main() -> int:
             )
 
     if args.build:
-        build_cmd = ["cmake", "--build", output_dir]
+        build_cmd = ["cmake", "--build", str(output_path)]
         building_id = notifier.notify(message="Compiling")
 
         progress = create_progress_bar_notifier()
@@ -303,6 +315,7 @@ def main() -> int:
         with CommandTimer() as tmr:
             if not run_command(
                 build_cmd,
+                cwd=base_dir,
                 log_file="build.log",
                 callback=lambda msg: ninja_build_progress(
                     msg,
