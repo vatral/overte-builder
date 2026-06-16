@@ -245,6 +245,7 @@ def main() -> int:
             "--build=missing",
             "-pr:b=default",
             "-o", "hwloc/*:shared=True",
+            "-c", "tools.build:cxxflags=['-include', 'cstdint']",
             "-of",
             str(output_path),
         ]
