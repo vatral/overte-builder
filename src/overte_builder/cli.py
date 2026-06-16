@@ -244,6 +244,7 @@ def main() -> int:
             "build_type=" + conan_build_type,
             "--build=missing",
             "-pr:b=default",
+            "-o", "hwloc/*:shared=True",
             "-of",
             str(output_path),
         ]
