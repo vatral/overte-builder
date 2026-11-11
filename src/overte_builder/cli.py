@@ -11,6 +11,8 @@ import shutil
 import subprocess
 import time
 import sys
+import pyfanotify as fan
+
 
 from pathlib import Path
 from typing import Callable
@@ -141,6 +143,9 @@ def main() -> int:
     parser.add_argument("--tsan", action="store_true", help="Build with Thread Sanitizer")
     parser.add_argument("--skip-conan", action="store_true", help="Skip Conan invocation")
     parser.add_argument("--skip-cmake", action="store_true", help="Skip CMake invocation")
+    parser.add_argument("--skip-crash-reporting", action="store_true", help="Skip crash reporting setup")
+
+
     parser.add_argument(
         "--build",
         action="store_true",
@@ -156,7 +161,9 @@ def main() -> int:
         action="store_true",
         help="Build with the Vulkan renderer",
     )
+    parser.add_argument("--auto-build", action="store_true", help="Watch the directory and build automatically")
     parser.add_argument("--test-progress", action="store_true", help="Test the progress bar")
+
 
     notifier = Notifier()
     args = parser.parse_args()
@@ -262,6 +269,7 @@ def main() -> int:
 
         print(f"{Fore.GREEN}Conan install succeeded after {tmr.hhmmss}{Fore.RESET}")
 
+
     if not args.skip_cmake:
         cmake_cmd = [
             "cmake",
@@ -276,6 +284,7 @@ def main() -> int:
                 "-fdiagnostics-generate-patch "
                 "-fdiagnostics-text-art-charset=emoji --param=max-vartrack-size=0"
             ),
+            "-DOVERTE_USE_SENTRY=ON"
         ]
 
         if args.debug:
@@ -289,6 +298,13 @@ def main() -> int:
 
         if args.vulkan:
             cmake_cmd += ["-DOVERTE_RENDERING_BACKEND=Vulkan"]
+
+        if not args.skip_crash_reporting:
+            cmake_cmd += [
+                "-DOVERTE_BACKTRACE_URL=https://2c906a69c2ab40a8b1b45d71f89a9fac@o4504831972343808.ingest.us.sentry.io/4504832427950080",
+                "-DOVERTE_BACKTRACE_TOKEN=sentrytest",
+            ]
+
 
         notifier.notify(message="Running CMake")
 
@@ -337,5 +353,8 @@ def main() -> int:
                 f"in {Fore.WHITE}{output_dir}{Fore.GREEN} in {tmr.hhmmss}{Fore.RESET}"
             )
         )
+
+    if args.auto_build:
+        faret = fan.Fanotify()
 
     return 0
