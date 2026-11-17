@@ -283,8 +283,7 @@ def main() -> int:
                 "-DCMAKE_CXX_FLAGS=-fdiagnostics-color=always "
                 "-fdiagnostics-generate-patch "
                 "-fdiagnostics-text-art-charset=emoji --param=max-vartrack-size=0"
-            ),
-            "-DOVERTE_USE_SENTRY=ON"
+            )
         ]
 
         if args.debug:
@@ -303,6 +302,7 @@ def main() -> int:
             cmake_cmd += [
                 "-DOVERTE_BACKTRACE_URL=https://2c906a69c2ab40a8b1b45d71f89a9fac@o4504831972343808.ingest.us.sentry.io/4504832427950080",
                 "-DOVERTE_BACKTRACE_TOKEN=sentrytest",
+                "-DOVERTE_USE_SENTRY=ON"
             ]
 
 
