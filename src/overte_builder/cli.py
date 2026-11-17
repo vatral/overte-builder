@@ -186,12 +186,13 @@ def main() -> int:
         args.skip_cmake = True
 
     build_name = "Release"
-    output_dir = "out/Release"
+    output_base_dir = "out"
+    output_dir = "Release"
     cmake_preset = "conan-release"
     conan_build_type = "Release"
 
     if args.debug:
-        output_dir = "out/Debug"
+        output_dir = "Debug"
         cmake_preset = "conan-debug"
         build_name = "Debug"
         conan_build_type = "Debug"
@@ -235,6 +236,28 @@ def main() -> int:
             return 1
         base_dir = parent
 
+
+    # Get the current git description for versioning
+    # Makes something like: 2026.10.1-16-g9d400e2abb
+    # This means build directories are per-branch.
+
+    git_description = ""
+    try:
+        git_description = subprocess.run(
+            ["git", "describe", "--all"],
+            cwd=base_dir,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError) as exc:
+        print(f"{Fore.RED}Error: Failed to generate version from git: {exc}{Fore.RESET}")
+        return 1
+
+    git_description = git_description.replace("heads/", "")
+    git_description = git_description.replace("/", "_")
+
+    output_dir = output_base_dir + "/" + git_description + "/" + output_dir
     output_path = base_dir / output_dir
 
     if not args.skip_conan and not args.skip_cmake and output_path.exists():
