@@ -266,6 +266,11 @@ def main() -> int:
     if not args.skip_conan:
         notifier.notify(message="Running Conan")
 
+        # Building multiple branches causes conflicts with CMakeUserPresets.
+        # Just get rid of it.
+        if os.path.exists(base_dir / "CMakeUserPresets.json"):
+            os.unlink(base_dir / "CMakeUserPresets.json")
+
         conan_cmd = [
             "conan",
             "install",
